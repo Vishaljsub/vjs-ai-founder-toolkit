@@ -69,3 +69,74 @@ jobs:
         run: |
           B=$(gcloud run services describe <APP_NAME>-backend --project "$PROJECT" --region "$REGION" --format='value(status.url)')
           curl -sf "$B/health" || (echo "backend health check failed" && exit 1)
+
+  # OPTIONAL second job — only include this if you also keep a manually-managed
+  # single VM in sync via CI (see the deploy-single-vm skill). Delete this job
+  # entirely if you don't have one; Cloud Run above is the primary path.
+  #
+  # IAP-tunneled SSH (`gcloud compute ssh ... --tunnel-through-iap`) has an idle
+  # timeout that kills the connection during long silent build phases (a
+  # dependency install with no stdout for several minutes) — a synchronous
+  # `docker compose up --build` run as the SSH command's foreground process gets
+  # SIGHUP'd mid-build and silently never finishes, even though the job looks
+  # green. Fix: launch the build detached (setsid + disown, logged to a file on
+  # the VM) in one step, then poll for completion in a separate step. Also
+  # serialize VM deploys with a concurrency group — two concurrent
+  # `docker compose up --build` runs against the same shared deploy directory
+  # (from rapid successive pushes) would race: one job's extraction stomping
+  # the other's in-progress build context.
+  deploy-vm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    concurrency:
+      group: deploy-vm
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Package the repo for the VM
+        run: |
+          tar czf /tmp/<APP_NAME>-vm-deploy.tgz --exclude node_modules --exclude .next --exclude .git \
+            --exclude '*.tgz' --exclude '.env' --exclude venv \
+            --exclude __pycache__ --exclude '.pytest_cache' --exclude '*.pyc' \
+            backend frontend
+
+      - name: Copy to the VM (IAP tunnel, no public SSH needed)
+        run: |
+          gcloud compute scp /tmp/<APP_NAME>-vm-deploy.tgz <VM_NAME>:<APP_NAME>-vm-deploy.tgz \
+            --project "$PROJECT" --zone <VM_ZONE> --tunnel-through-iap
+
+      - name: Extract + launch the rebuild DETACHED
+        # <DEPLOY_PATH_ON_VM> should be a shared, root-owned path (e.g. /opt/<app_name>),
+        # NOT a per-user home dir — OS Login maps each SSH identity (human accounts,
+        # this job's service account) to its own separate $HOME, so anything written
+        # under ~ is invisible to a different identity's next run. Your env file on the
+        # VM should be gitignored and never part of the tarball, so extracting over
+        # <DEPLOY_PATH_ON_VM> never touches it.
+        run: |
+          gcloud compute ssh <VM_NAME> --project "$PROJECT" --zone <VM_ZONE> --tunnel-through-iap --command \
+            'sudo mkdir -p <DEPLOY_PATH_ON_VM> && sudo rm -rf <DEPLOY_PATH_ON_VM>/backend <DEPLOY_PATH_ON_VM>/frontend && sudo tar xzf ~/<APP_NAME>-vm-deploy.tgz -C <DEPLOY_PATH_ON_VM> && cd <DEPLOY_PATH_ON_VM> && setsid bash -c "sudo docker compose --env-file <ENV_FILE_PATH> -f <COMPOSE_FILE_PATH> up -d --build > <DEPLOY_PATH_ON_VM>/deploy.log 2>&1" </dev/null >/dev/null 2>&1 & disown; sleep 2; echo launched'
+
+      - name: Poll until the rebuild finishes (up to ~20 min)
+        run: |
+          for i in $(seq 1 60); do
+            STATE=$(gcloud compute ssh <VM_NAME> --project "$PROJECT" --zone <VM_ZONE> --tunnel-through-iap --command \
+              'pgrep -f "docker compose .* up -d --build" >/dev/null && echo BUILDING || echo DONE' 2>&1 | tail -1)
+            echo "[$i] $STATE"
+            if [ "$STATE" = "DONE" ]; then exit 0; fi
+            sleep 20
+          done
+          echo "Timed out waiting for the VM build — check <DEPLOY_PATH_ON_VM>/deploy.log on the VM" >&2
+          exit 1
+
+      - name: Smoke test
+        run: |
+          curl -sf -o /dev/null <VM_URL>/health
