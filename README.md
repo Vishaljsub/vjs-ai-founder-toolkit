@@ -24,7 +24,16 @@ claude-code-toolkit/
 ├── skills/
 │   ├── deploy-railway-gcp/SKILL.md    # Railway + GCP push-to-deploy playbook
 │   ├── deploy-gcp-cloudrun/SKILL.md   # GCP Cloud Run architecture + CI/CD detail
-│   └── wrap/SKILL.md                  # end-of-session change-management bookkeeping
+│   ├── deploy-single-vm/SKILL.md      # manual single-VM deploy pattern (no CI/CD)
+│   ├── wrap/SKILL.md                  # end-of-session change-management bookkeeping
+│   ├── backend-service/SKILL.md       # start/manage the backend locally or via Docker
+│   ├── frontend-service/SKILL.md      # start/manage the frontend locally or via Docker
+│   ├── logs/SKILL.md                  # tail logs for any service, local or deployed
+│   ├── status/SKILL.md                # health check across all services before debugging
+│   ├── rebuild/SKILL.md               # targeted rebuild/restart after code changes
+│   ├── migrate/SKILL.md               # create + apply DB migrations
+│   ├── test-api/SKILL.md              # smoke test: health → auth → a few core endpoints
+│   └── debug/SKILL.md                 # symptom → root cause → fix, grown from real incidents
 ├── change-management/
 │   ├── CHANGELOG.template.md
 │   ├── BACKLOG.template.md
@@ -41,6 +50,15 @@ claude-code-toolkit/
     └── skills/                        # repeatable GTM playbooks these agents run
 ```
 
+The `skills/` folder splits into two groups:
+- **Deploy skills** (`deploy-railway-gcp`, `deploy-gcp-cloudrun`, `deploy-single-vm`) — how code
+  gets to production.
+- **Day-to-day ops + change-management skills** (`wrap`, `backend-service`, `frontend-service`,
+  `logs`, `status`, `rebuild`, `migrate`, `test-api`, `debug`) — the habits that keep local dev
+  fast and keep CHANGELOG/BACKLOG honest. `status`/`rebuild`/`test-api` exist so Claude reaches for
+  a fast, targeted command instead of re-deriving one each time; `debug` and `wrap`'s CHANGELOG
+  convention reinforce each other — every non-obvious fix should land a root-cause line in both.
+
 ## Quickstart — installing this into a project
 
 1. Read **`SETUP.md`** and install/authenticate the prerequisite tools (git, GitHub CLI, Node,
@@ -50,7 +68,18 @@ claude-code-toolkit/
    # Deployment skills
    cp -r skills/deploy-railway-gcp   <your-repo>/.claude/skills/deploy
    cp -r skills/deploy-gcp-cloudrun  <your-repo>/.claude/skills/deploy-gcp-cloudrun
-   cp -r skills/wrap                 <your-repo>/.claude/skills/wrap
+   cp -r skills/deploy-single-vm     <your-repo>/.claude/skills/deploy-single-vm   # only if you have one
+
+   # Day-to-day ops + change-management skills
+   cp -r skills/wrap             <your-repo>/.claude/skills/wrap
+   cp -r skills/backend-service  <your-repo>/.claude/skills/backend
+   cp -r skills/frontend-service <your-repo>/.claude/skills/frontend
+   cp -r skills/logs             <your-repo>/.claude/skills/logs
+   cp -r skills/status           <your-repo>/.claude/skills/status
+   cp -r skills/rebuild          <your-repo>/.claude/skills/rebuild
+   cp -r skills/migrate          <your-repo>/.claude/skills/migrate
+   cp -r skills/test-api         <your-repo>/.claude/skills/test-api
+   cp -r skills/debug            <your-repo>/.claude/skills/debug
 
    # Change-management files (rename off .template.md)
    cp change-management/CHANGELOG.template.md    <your-repo>/CHANGELOG.md
