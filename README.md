@@ -1,1 +1,94 @@
-PLACEHOLDER
+# Claude Code DevOps + Leadership Toolkit
+
+A portable package of Claude Code skills and agents for two things:
+
+1. **Auto-deployment** — let Claude push code straight to production on Railway and/or GCP Cloud
+   Run, with GitHub-connected CI/CD doing the actual build+deploy on every `git push`. Claude's job
+   becomes "write the code, commit, push" — not "SSH in and run deploy scripts by hand."
+2. **Change management** — a lightweight, file-based history (CHANGELOG / BACKLOG / DEPLOYMENTS /
+   decisions log) that Claude reads at the start of every session and updates at the end, so
+   context survives across sessions without you re-explaining the project each time.
+3. **A virtual leadership team** — advisor agents (Chief of Staff, CGO, CFO, CMO, CTO, Head of
+   Sales, Head of People + growth specialists) for a solo/small founder to think through go-to-
+   market, pricing, hiring, and roadmap decisions. Advisory only — they never touch code or deploys.
+
+Everything in here is a **template**: `{{PLACEHOLDER}}` tokens mark what you need to fill in for
+your own project. Nothing here contains real credentials, URLs, or business-specific content.
+
+## What's in this folder
+
+```
+claude-code-toolkit/
+├── README.md                          # this file
+├── SETUP.md                           # prerequisites + one-time account/CLI setup
+├── skills/
+│   ├── deploy-railway-gcp/SKILL.md    # Railway + GCP push-to-deploy playbook
+│   ├── deploy-gcp-cloudrun/SKILL.md   # GCP Cloud Run architecture + CI/CD detail
+│   └── wrap/SKILL.md                  # end-of-session change-management bookkeeping
+├── change-management/
+│   ├── CHANGELOG.template.md
+│   ├── BACKLOG.template.md
+│   ├── DEPLOYMENTS.template.md
+│   └── decisions.template.md
+├── github-workflows/
+│   └── gcp-cloudrun.yml               # GitHub Actions workflow template (WIF-based, no keys)
+└── agents/
+    ├── README.md
+    ├── chief-of-staff.md, chief-growth-officer.md, cfo.md, cmo.md, cto.md,
+    │   head-of-sales.md, head-of-people.md
+    ├── specialists/                   # positioning, competitive intel, content, demand-gen,
+    │                                   #   sales-enablement, launch-pr
+    └── skills/                        # repeatable GTM playbooks these agents run
+```
+
+## Quickstart — installing this into a project
+
+1. Read **`SETUP.md`** and install/authenticate the prerequisite tools (git, GitHub CLI, Node,
+   Railway CLI, gcloud CLI) and accounts (GitHub, Railway, GCP).
+2. Copy what you want into your project's `.claude/` folder and repo root:
+   ```bash
+   # Deployment skills
+   cp -r skills/deploy-railway-gcp   <your-repo>/.claude/skills/deploy
+   cp -r skills/deploy-gcp-cloudrun  <your-repo>/.claude/skills/deploy-gcp-cloudrun
+   cp -r skills/wrap                 <your-repo>/.claude/skills/wrap
+
+   # Change-management files (rename off .template.md)
+   cp change-management/CHANGELOG.template.md    <your-repo>/CHANGELOG.md
+   cp change-management/BACKLOG.template.md      <your-repo>/BACKLOG.md
+   cp change-management/DEPLOYMENTS.template.md  <your-repo>/DEPLOYMENTS.md
+   mkdir -p <your-repo>/docs
+   cp change-management/decisions.template.md    <your-repo>/docs/decisions.md
+
+   # GitHub Actions workflow (GCP Cloud Run path only)
+   mkdir -p <your-repo>/.github/workflows
+   cp github-workflows/gcp-cloudrun.yml <your-repo>/.github/workflows/gcp-deploy.yml
+
+   # Leadership team agents (optional)
+   cp -r agents <your-repo>/.claude/agents-leadership-team
+   ```
+3. **Find-and-replace every `{{PLACEHOLDER}}`** (product name, founder name, GitHub org/repo, GCP
+   project ID, service names, URLs) with your project's real values, across all copied files.
+4. Add the snippet in `CLAUDE.md.snippet.md` to your project's `CLAUDE.md` so Claude picks up the
+   change-management habit and knows how deploys work automatically.
+5. Do the one-time platform setup (Railway project link, GCP service accounts + Workload Identity
+   Federation) described in `SETUP.md`.
+6. From then on: ask Claude to build something, and when it's ready say **"push this to
+   production"** — it commits, pushes, and (if you've set up the workflow) CI/CD takes it from
+   there. Run the `wrap` skill (or say "wrap up this session") at the end of a session to keep
+   CHANGELOG/BACKLOG/DEPLOYMENTS current.
+
+## Design principles baked into this package
+
+- **Push-to-deploy, not push-a-button.** `git push` is the only deploy action Claude ever needs to
+  take. All the actual building/rolling out happens in CI/CD (Railway's GitHub integration, or a
+  GitHub Actions workflow using Workload Identity Federation for GCP) — never a manual SSH/gcloud
+  session unless something's actually broken.
+- **Keyless cloud auth.** The GCP workflow template uses Workload Identity Federation, not
+  downloaded service-account JSON keys sitting in GitHub Secrets. Fewer long-lived credentials to
+  leak or rotate.
+- **File-based memory over chat history.** CHANGELOG/BACKLOG/DEPLOYMENTS/decisions.md are checked
+  into the repo, human-readable, and greppable — they survive a fresh Claude Code session (or a
+  new teammate) with zero re-explaining.
+- **Advisory agents never touch the build.** The leadership-team agents are explicitly told they
+  don't edit code, run deploys, or touch build tooling — keeping "thinking about the business" and
+  "changing the product" as separate, auditable lanes.
