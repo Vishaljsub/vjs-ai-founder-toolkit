@@ -35,3 +35,18 @@ code). After such a one-time step, take over and run the rest yourself.
 
 Full playbooks with every known gotcha live in the `deploy` and `deploy-gcp-cloudrun` skills —
 read those before debugging a failed deploy from scratch.
+
+## Day-to-day skills — use these before doing it by hand
+| Skill | When |
+|---|---|
+| `status` | App not responding? Check this **first** — rules out "a service isn't running" before you debug a real bug |
+| `debug` | Hitting a known-shaped error (failed to fetch, streaming error, migration error)? Check here before manual debugging |
+| `rebuild` | Just changed code? Targeted rebuild/restart, not a full `docker compose down && up` |
+| `logs` | Need to see what a service is doing, local or deployed |
+| `backend` / `frontend` | Start or restart a single service |
+| `migrate` | Create/apply a DB migration |
+| `test-api` | Smoke test the API instead of hand-writing curl commands |
+| `wrap` | End of session — update CHANGELOG/BACKLOG/DEPLOYMENTS/decisions.md |
+
+Every non-obvious fix should land a one-line root cause in **both** `debug`'s skill file and
+`CHANGELOG.md` — they're meant to reinforce each other into a searchable incident history.
