@@ -56,6 +56,21 @@ echo "LIVE"
 - **Build outlives the SSH session** → always run it detached (`setsid ... & disown`) to a
   logfile and poll the endpoint or tail the logfile — don't hold the SSH session open across a
   multi-minute build if your tooling has a session time cap.
+- **IAP-tunneled SSH silently kills long builds** → `gcloud compute ssh ... --tunnel-through-iap`
+  has an **idle timeout** that drops the connection during long silent phases (a dependency
+  install with no stdout for several minutes) — a synchronous `docker compose up --build` run as
+  the SSH command's foreground process gets SIGHUP'd mid-build and the build is silently
+  cancelled, even though the calling job/command looked like it succeeded. The detached
+  (`setsid`/`disown` + logfile) pattern above isn't optional if you're tunneling through IAP —
+  it's the fix. If this is CI-triggered, split it into two steps: one that launches the detached
+  build and returns immediately, and a second that polls (e.g. `pgrep -f "docker compose .* up -d
+  --build"` over SSH in a loop) until the process is gone, so the CI job actually waits for the
+  real result instead of declaring success the moment the launch command returns.
+- **Concurrent deploys race on a shared deploy directory** → if this is triggered by CI on every
+  push, two rapid successive pushes can run `docker compose up --build` against the same shared
+  path at the same time — one run's `rm -rf`/extraction stomping the other's in-progress build
+  context. Serialize with a concurrency group (e.g. GitHub Actions'
+  `concurrency: { group: deploy-vm, cancel-in-progress: false }`) so runs queue instead of racing.
 - **Migrations** — confirm whether they run automatically on backend startup; if so, named
   volumes for the DB persist across a rebuild so data is safe, but double-check before assuming.
 
